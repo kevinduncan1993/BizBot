@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BizBot Chat</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; background:#f7f7f8; }
+    .app { max-width: 760px; margin: 0 auto; padding: 20px; }
+    .card { background:#fff; border-radius:14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); padding:16px; }
+    .header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#16a34a; }
+    .messages { max-height: 60vh; overflow:auto; padding: 8px; display:flex; flex-direction:column; gap:10px; }
+    .msg { padding:10px 12px; border-radius:12px; max-width: 80%; white-space: pre-wrap; }
+    .user { align-self:flex-end; background:#2563eb; color:white; }
+    .bot { align-self:flex-start; background:#eef2ff; color:#111827; }
+    .input { display:flex; gap:8px; margin-top:12px; }
+    input[type="text"] { flex:1; padding:12px; border-radius:10px; border:1px solid #d1d5db; }
+    button { padding:12px 14px; border-radius:10px; border:0; background:#111827; color:#fff; cursor:pointer; }
+    .pill { display:inline-block; background:#111827; color:#fff; padding:4px 8px; border-radius:999px; font-size:12px; margin-top:6px; }
+    .form { margin-top: 10px; padding: 10px; background: #f3f4f6; border-radius: 10px; }
+    .form label { display:block; font-size:12px; color:#374151; margin-top:8px; }
+    .form input { width:100%; padding:8px; border:1px solid #d1d5db; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="header">
+        <div class="dot"></div>
+        <div><strong>BizBot</strong> · AI Assistant</div>
+        <span class="pill">local</span>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <div class="input">
+        <input id="text" type="text" placeholder="Type your question… e.g., Can I book Tuesday 3pm?" />
+        <button id="send">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = "http://127.0.0.1:8000";
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("text");
+    const sendBtn = document.getElementById("send");
+
+    const state = { history: [] };
+
+    function addMsg(role, content) {
+      const div = document.createElement("div");
+      div.className = "msg " + (role === "user" ? "user" : "bot");
+      div.textContent = content;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function callChat(text) {
+      // keep only user turns for now (MVP)
+      const body = { messages: [{ role: "user", content: text }] };
+
+      const res = await fetch(API + "/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }
+
+    function renderAction(action) {
+      if (!action) return;
+
+      const wrap = document.createElement("div");
+      wrap.className = "form";
+      const title = action.name === "collect_lead" ? "Leave your details" : "Booking request";
+      wrap.innerHTML = `<strong>${title}</strong>`;
+
+      action.collect.forEach(field => {
+        const id = "f_" + field;
+        const label = document.createElement("label");
+        label.setAttribute("for", id);
+        label.textContent = field.replaceAll("_"," ");
+        const input = document.createElement("input");
+        input.id = id;
+        input.placeholder = field;
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+      });
+
+      const submit = document.createElement("button");
+      submit.textContent = "Submit";
+      submit.style.marginTop = "10px";
+      submit.onclick = async () => {
+        const payload = {};
+        action.collect.forEach(field => {
+          const id = "f_" + field;
+          payload[field] = document.getElementById(id).value;
+        });
+        try {
+          const res = await fetch(API + action.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const json = await res.json();
+          addMsg("assistant", action.name === "collect_lead"
+            ? "Thanks! Your details were saved. We'll reach out soon."
+            : "Got it! Your booking request was saved. We'll confirm availability.");
+          wrap.remove();
+          console.log("Saved:", json);
+        } catch (e) {
+          addMsg("assistant", "Hmm, I couldn't save that. Please try again or contact us.");
+        }
+      };
+      wrap.appendChild(submit);
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function onSend() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      addMsg("user", text);
+      inputEl.value = "";
+      addMsg("assistant", "…thinking");
+
+      try {
+        const data = await callChat(text);
+        // replace the last "…thinking" bubble with the real answer
+        messagesEl.lastChild.textContent = data.answer || "(no answer)";
+        renderAction(data.action);
+      } catch (e) {
+        messagesEl.lastChild.textContent = "Request failed. Is the API running?";
+      }
+    }
+
+    sendBtn.onclick = onSend;
+    inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") onSend(); });
+
+    // greeting
+    addMsg("assistant", "Hi! I can answer questions and help you book or leave your info.");
+  </script>
+</body>
+</html>

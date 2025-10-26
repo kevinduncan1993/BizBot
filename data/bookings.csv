@@ -1,0 +1,4 @@
+ts,name,email,phone,desired_date,desired_time,service,notes,source
+2025-10-25T22:03:19.625209,string,user@example.com,string,string,string,string,string,chat
+2025-10-25T22:05:37.571596,Kevin Finnissee,kevin@example.com,555-123-4567,2025-11-05,3 PM,Consultation,Prefer afternoon slot.,chat
+2025-10-25T22:42:07.452643,Kevin Finnissee,kevinduncan1993@gmail.com,2295068522,10-25-25,9Am,Lawn care,N/A,chat
