@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 from dotenv import load_dotenv
 
@@ -43,7 +44,7 @@ if not KB_PATH.exists():
     KB_PATH.write_text(
         "question,answer,link\n"
         "What are your hours?,We are open Mon–Sat 9am–6pm.,/contact\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
 def load_kb():
@@ -54,7 +55,7 @@ def load_kb():
 load_kb()
 
 # ---------- FastAPI ----------
-app = FastAPI(title="BizBot (Simple)", version="0.2.2")
+app = FastAPI(title="BizBot (Simple)", version="0.2.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],        # fine for local dev and simple embeds
@@ -117,11 +118,11 @@ def build_context(user_text: str) -> str:
 
 LEAD_KEYWORDS = [
     "quote", "estimate", "contact me", "reach me", "call me",
-    "need help", "pricing", "price", "sign up", "get started", "free consult"
+    "need help", "pricing", "price", "sign up", "get started", "free consult",
 ]
 BOOK_KEYWORDS = [
     "book", "schedule", "appointment", "tomorrow", "today",
-    "next week", "availability", "available", "reschedule"
+    "next week", "availability", "available", "reschedule",
 ]
 
 def detect_intent(text: str) -> Optional[str]:
@@ -144,6 +145,27 @@ def write_csv_row(path: Path, headers: List[str], row: Dict[str, Any]):
         w.writerow(row)
 
 # ---------- Routes ----------
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+    <style>
+        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 32px; }
+        code { background: #f2f4f7; padding: 2px 6px; border-radius: 6px; }
+        a { color: #2563eb; text-decoration: none; }
+    </style>
+    <h2>BizBot API</h2>
+    <p>Welcome! Try these useful paths:</p>
+    <ul>
+      <li><a href="/docs">/docs</a> – interactive API</li>
+      <li><a href="/health">/health</a> – basic status</li>
+      <li><a href="/web/chat.html">/web/chat.html</a> – simple embedded widget (if present)</li>
+    </ul>
+    <p>POST to <code>/chat</code> with a JSON body like:</p>
+    <pre>{
+  "messages": [{"role":"user","content":"Are you open on Sunday?"}]
+}</pre>
+    """
+
 @app.get("/health")
 def health():
     return {
@@ -174,13 +196,13 @@ def chat(req: ChatRequest):
         action = {
             "name": "collect_lead",
             "collect": ["name", "email", "phone", "service", "zip", "notes"],
-            "endpoint": "/actions/lead"
+            "endpoint": "/actions/lead",
         }
     elif intent == "book_appointment":
         action = {
             "name": "book_appointment",
             "collect": ["name", "email", "phone", "desired_date", "desired_time", "service", "notes"],
-            "endpoint": "/actions/booking"
+            "endpoint": "/actions/booking",
         }
 
     # If no API key yet, return wiring message (keep action so flows can be tested)
@@ -188,7 +210,7 @@ def chat(req: ChatRequest):
         return {
             "answer": "The bot is wired up! Add your OPENAI_API_KEY in .env to enable AI answers.",
             "citations": [],
-            "action": action
+            "action": action,
         }
 
     # Call model
