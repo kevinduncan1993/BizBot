@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
 from dotenv import load_dotenv
 
@@ -14,7 +15,8 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(ENV_PATH)
 
-DATA_DIR = Path("data")
+# Always use the project-root /data folder (works locally & on Render)
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # read from .env
@@ -35,6 +37,15 @@ if _openai_import_ok and OPENAI_API_KEY:
 KB_PATH = DATA_DIR / "kb.csv"
 KB: List[Dict[str, str]] = []
 
+# Create a tiny default KB if missing (prevents startup crash on fresh deploys)
+if not KB_PATH.exists():
+    KB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    KB_PATH.write_text(
+        "question,answer,link\n"
+        "What are your hours?,We are open Mon–Sat 9am–6pm.,/contact\n",
+        encoding="utf-8"
+    )
+
 def load_kb():
     global KB
     with KB_PATH.open(newline="", encoding="utf-8") as f:
@@ -43,14 +54,19 @@ def load_kb():
 load_kb()
 
 # ---------- FastAPI ----------
-app = FastAPI(title="BizBot (Simple)", version="0.2.1")
+app = FastAPI(title="BizBot (Simple)", version="0.2.2")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # fine for local dev
+    allow_origins=["*"],        # fine for local dev and simple embeds
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static widget files if app/api/web exists
+WEB_DIR = Path(__file__).parent / "web"
+if WEB_DIR.exists():
+    app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
 
 # ---------- Schemas ----------
 class Msg(BaseModel):
@@ -133,6 +149,7 @@ def health():
     return {
         "ok": True,
         "kb_rows": len(KB),
+        "kb_path": str(KB_PATH),
         "has_key": bool(OPENAI_API_KEY),
         "openai_import_ok": _openai_import_ok,
         "client_ready": client is not None,
