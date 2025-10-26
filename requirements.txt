@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 python-dotenv
 openai
+pydantic[email]>=2.5
+starlette
